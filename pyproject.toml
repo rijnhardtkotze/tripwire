@@ -1,0 +1,17 @@
+[project]
+name = "tripwire"
+version = "0.0.1"
+description = "Behavioral tripwires for programmable banking"
+readme = "README.md"
+authors = [
+    { name = "Rijnhardt Kotze", email = "padpatrollie@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = []
+
+[project.scripts]
+tripwire = "tripwire:main"
+
+[build-system]
+requires = ["uv_build>=0.9.15,<0.10.0"]
+build-backend = "uv_build"
