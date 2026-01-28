@@ -15,7 +15,7 @@ This file provides guidance for AI assistants working with the tripwire codebase
 
 ## Project Structure
 
-```
+```text
 tripwire/
 ├── src/tripwire/       # Main package source code
 │   └── __init__.py     # Package entry point with main() function
