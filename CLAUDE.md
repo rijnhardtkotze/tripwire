@@ -112,7 +112,7 @@ uv add <package-name>
 ## Key Files
 
 | File | Purpose |
-|------|---------|
+| ------ | --------- |
 | `src/tripwire/__init__.py` | Main module and CLI entry point |
 | `pyproject.toml` | Project metadata, dependencies, build config |
 | `mise.toml` | Developer tool versions |
