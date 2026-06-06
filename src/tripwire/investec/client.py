@@ -139,10 +139,12 @@ class InvestecClient:
         return f"{self._base_url}{path}"
 
     def _basic_auth_header(self) -> str:
+        """Return the HTTP Basic ``Authorization`` header for the token call."""
         raw = f"{self._client_id}:{self._client_secret}".encode("utf-8")
         return "Basic " + base64.b64encode(raw).decode("ascii")
 
     def _token_is_valid(self) -> bool:
+        """Return True while the cached token is present and not near expiry."""
         return (
             self._access_token is not None
             and time.monotonic() < self._token_expires_at - _TOKEN_EXPIRY_BUFFER_SECONDS
@@ -187,7 +189,12 @@ class InvestecClient:
                     f"Authentication failed with status {response.status_code}: {response.text}"
                 )
 
-            payload = response.json()
+            try:
+                payload = response.json()
+            except ValueError as exc:
+                raise InvestecAuthError(
+                    f"Token response was not valid JSON: {response.text}"
+                ) from exc
             token = payload.get("access_token")
             if not token:
                 raise InvestecAuthError("Token response did not contain an access_token")
@@ -207,6 +214,7 @@ class InvestecClient:
         params: dict[str, Any] | None = None,
         json: Any | None = None,
     ) -> Any:
+        """Send an authenticated request, retrying once on a 401."""
         def send(token: str) -> httpx.Response:
             headers = {
                 "Authorization": f"Bearer {token}",
@@ -236,7 +244,14 @@ class InvestecClient:
                 response_body=response.text,
             )
 
-        return response.json()
+        try:
+            return response.json()
+        except ValueError as exc:
+            raise InvestecAPIError(
+                f"Investec API returned invalid JSON for {path}",
+                status_code=response.status_code,
+                response_body=response.text,
+            ) from exc
 
     @staticmethod
     def _unwrap_data(payload: Any) -> Any:
@@ -346,7 +361,9 @@ class InvestecClient:
             self._http.close()
 
     def __enter__(self) -> "InvestecClient":
+        """Enter the context manager, returning this client."""
         return self
 
     def __exit__(self, *exc_info: object) -> None:
+        """Exit the context manager, closing the owned HTTP client."""
         self.close()

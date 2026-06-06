@@ -38,6 +38,7 @@ class InvestecAPIError(InvestecError):
         status_code: int | None = None,
         response_body: str | None = None,
     ) -> None:
+        """Store the error message alongside HTTP status and response body."""
         super().__init__(message)
         self.status_code = status_code
         self.response_body = response_body
