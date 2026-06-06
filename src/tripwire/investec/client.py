@@ -128,6 +128,15 @@ class InvestecClient:
 
     # -- Authentication ----------------------------------------------------
 
+    def _url(self, path: str) -> str:
+        """Build an absolute URL from ``path``.
+
+        Using absolute URLs (rather than relying on the HTTP client's
+        ``base_url``) keeps an injected :class:`httpx.Client` working even
+        when it was created without a ``base_url`` configured.
+        """
+        return f"{self._base_url}{path}"
+
     def _basic_auth_header(self) -> str:
         raw = f"{self._client_id}:{self._client_secret}".encode("utf-8")
         return "Basic " + base64.b64encode(raw).decode("ascii")
@@ -160,7 +169,7 @@ class InvestecClient:
 
             try:
                 response = self._http.post(
-                    _TOKEN_PATH,
+                    self._url(_TOKEN_PATH),
                     headers={
                         "Authorization": self._basic_auth_header(),
                         "x-api-key": self._api_key,
@@ -205,7 +214,7 @@ class InvestecClient:
             try:
                 return self._http.request(
                     method,
-                    f"{_API_PREFIX}{path}",
+                    self._url(f"{_API_PREFIX}{path}"),
                     headers=headers,
                     params=params,
                     json=json,

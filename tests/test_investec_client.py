@@ -95,6 +95,29 @@ def test_authenticate_sends_basic_auth_and_api_key(httpx_mock: HTTPXMock) -> Non
     assert b"grant_type=client_credentials" in request.content
 
 
+def test_works_with_injected_client_without_base_url(httpx_mock: HTTPXMock) -> None:
+    # A consumer-supplied client may not have base_url set; the wrapper
+    # builds absolute URLs so requests still resolve correctly.
+    mock_token(httpx_mock)
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{BASE_URL}/za/pb/v1/accounts",
+        json={"data": {"accounts": []}},
+    )
+    injected = httpx.Client()
+    client = InvestecClient(
+        client_id="id",
+        client_secret="secret",
+        api_key="key",
+        base_url=BASE_URL,
+        http_client=injected,
+    )
+    try:
+        assert client.get_accounts() == []
+    finally:
+        injected.close()
+
+
 def test_authenticate_caches_token(httpx_mock: HTTPXMock) -> None:
     mock_token(httpx_mock)
     with make_client() as client:
@@ -168,10 +191,12 @@ def test_get_account_transactions_with_filters(httpx_mock: HTTPXMock) -> None:
     mock_token(httpx_mock)
     httpx_mock.add_response(
         method="GET",
-        url=(
-            f"{BASE_URL}/za/pb/v1/accounts/123/transactions"
-            "?fromDate=2026-01-01&toDate=2026-01-31&transactionType=CardPurchases"
-        ),
+        url=f"{BASE_URL}/za/pb/v1/accounts/123/transactions",
+        match_params={
+            "fromDate": "2026-01-01",
+            "toDate": "2026-01-31",
+            "transactionType": "CardPurchases",
+        },
         json={
             "data": {
                 "transactions": [
