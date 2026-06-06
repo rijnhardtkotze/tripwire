@@ -29,16 +29,16 @@ jobs:
         id: detect-tests
         shell: bash
         run: |
-          if find tests -type f -name '*.py' -print -quit 2>/dev/null | grep -q . || find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
-            echo "has_tests=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_tests=false" >> "$GITHUB_OUTPUT"
+          has_tests=false
+
+          if find tests -type f -name '*.py' -print -quit 2>/dev/null | grep -q .; then
+            has_tests=true
+          elif find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
+            has_tests=true
           fi
+
+          echo "has_tests=$has_tests" >> "$GITHUB_OUTPUT"
 
       - name: Run tests
         if: steps.detect-tests.outputs.has_tests == 'true'
         run: uv run --with pytest pytest
-
-      - name: Skip tests
-        if: steps.detect-tests.outputs.has_tests != 'true'
-        run: echo "No test files found; skipping pytest."
