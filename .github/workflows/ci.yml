@@ -29,16 +29,21 @@ jobs:
         id: detect-tests
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
-          from pathlib import Path
+          import os
 
           excluded_dirs = {".git", ".venv", "node_modules", "__pycache__"}
           has_tests = False
 
-          for path in Path(".").rglob("*.py"):
-              if excluded_dirs.intersection(path.parts):
-                  continue
-              if "tests" in path.parts or path.name.startswith("test_") or path.name.endswith("_test.py"):
-                  has_tests = True
+          for root, dirs, files in os.walk(".", topdown=True):
+              dirs[:] = [d for d in dirs if d not in excluded_dirs]
+              for filename in files:
+                  if not filename.endswith(".py"):
+                      continue
+                  root_parts = root.split(os.sep)
+                  if "tests" in root_parts or filename.startswith("test_") or filename.endswith("_test.py"):
+                      has_tests = True
+                      break
+              if has_tests:
                   break
 
           print(f"has_tests={'true' if has_tests else 'false'}")
