@@ -77,7 +77,7 @@ class InvestecClient:
         self._client_id = client_id
         self._client_secret = client_secret
         self._api_key = api_key
-        self._base_url = base_url.rstrip("/")
+        self._base_url = base_url.strip().rstrip("/")
 
         self._http = http_client or httpx.Client(base_url=self._base_url, timeout=timeout)
         self._owns_http = http_client is None
@@ -200,10 +200,18 @@ class InvestecClient:
                     f"Token response was not a JSON object: {response.text}"
                 )
             token = payload.get("access_token")
-            if not token:
-                raise InvestecAuthError("Token response did not contain an access_token")
+            if not isinstance(token, str) or not token:
+                raise InvestecAuthError(
+                    "Token response did not contain a valid access_token"
+                )
 
-            expires_in = float(payload.get("expires_in", 0) or 0)
+            try:
+                expires_in = float(payload.get("expires_in", 0) or 0)
+            except (TypeError, ValueError) as exc:
+                raise InvestecAuthError(
+                    f"Token response had a non-numeric expires_in: {response.text}"
+                ) from exc
+
             self._access_token = token
             self._token_expires_at = time.monotonic() + expires_in
             return token

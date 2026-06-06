@@ -171,6 +171,42 @@ def test_authenticate_non_object_json_raises(httpx_mock: HTTPXMock) -> None:
             client.authenticate()
 
 
+def test_authenticate_non_string_token_raises(httpx_mock: HTTPXMock) -> None:
+    """A non-string access_token is rejected rather than cached."""
+    httpx_mock.add_response(
+        method="POST", url=TOKEN_URL, json={"access_token": 12345, "expires_in": 60}
+    )
+    with make_client() as client:
+        with pytest.raises(InvestecAuthError):
+            client.authenticate()
+
+
+def test_authenticate_non_numeric_expires_in_raises(httpx_mock: HTTPXMock) -> None:
+    """A non-numeric expires_in surfaces as InvestecAuthError, not ValueError."""
+    httpx_mock.add_response(
+        method="POST",
+        url=TOKEN_URL,
+        json={"access_token": "tok", "expires_in": "soon"},
+    )
+    with make_client() as client:
+        with pytest.raises(InvestecAuthError):
+            client.authenticate()
+
+
+def test_base_url_whitespace_is_stripped() -> None:
+    """A base_url with surrounding whitespace is normalised on construction."""
+    client = InvestecClient(
+        client_id="id",
+        client_secret="secret",
+        api_key="key",
+        base_url=f"  {BASE_URL}/\n",
+    )
+    try:
+        assert client._base_url == BASE_URL
+    finally:
+        client.close()
+
+
 def test_get_accounts(httpx_mock: HTTPXMock) -> None:
     """get_accounts maps the response envelope into Account objects."""
     mock_token(httpx_mock)
