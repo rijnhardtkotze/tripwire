@@ -293,6 +293,28 @@ def test_api_error_includes_status_and_body(httpx_mock: HTTPXMock) -> None:
     assert excinfo.value.response_body == "server boom"
 
 
+def test_retry_network_error_is_wrapped(httpx_mock: HTTPXMock) -> None:
+    # First request 401s, triggering a forced re-auth; the retried request
+    # then hits a transport error which must surface as InvestecAPIError
+    # rather than a bare httpx exception.
+    mock_token(httpx_mock)
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{BASE_URL}/za/pb/v1/accounts",
+        status_code=401,
+        text="expired",
+    )
+    mock_token(httpx_mock)
+    httpx_mock.add_exception(
+        httpx.ConnectError("boom"),
+        method="GET",
+        url=f"{BASE_URL}/za/pb/v1/accounts",
+    )
+    with make_client() as client:
+        with pytest.raises(InvestecAPIError):
+            client.get_accounts()
+
+
 def test_unauthorized_triggers_token_refresh(httpx_mock: HTTPXMock) -> None:
     # First token, then a 401 on the resource, then a forced re-auth, then success.
     mock_token(httpx_mock)

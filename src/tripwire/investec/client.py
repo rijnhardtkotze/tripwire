@@ -109,7 +109,8 @@ class InvestecClient:
         client_id = os.environ.get("INVESTEC_CLIENT_ID", "").strip()
         client_secret = os.environ.get("INVESTEC_CLIENT_SECRET", "").strip()
         api_key = os.environ.get("INVESTEC_API_KEY", "").strip()
-        resolved_base_url = base_url or os.environ.get("INVESTEC_BASE_URL") or PRODUCTION_BASE_URL
+        env_base_url = os.environ.get("INVESTEC_BASE_URL", "").strip()
+        resolved_base_url = base_url or env_base_url or PRODUCTION_BASE_URL
 
         if not client_id or not client_secret or not api_key:
             raise InvestecConfigError(
@@ -219,7 +220,7 @@ class InvestecClient:
                     params=params,
                     json=json,
                 )
-            except httpx.HTTPError as exc:  # pragma: no cover - network failure path
+            except httpx.HTTPError as exc:
                 raise InvestecAPIError(f"Request to {path} failed: {exc}") from exc
 
         response = send(self.authenticate())
