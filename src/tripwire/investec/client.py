@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import base64
 import os
+import threading
 import time
 from typing import Any
 
@@ -51,7 +52,9 @@ class InvestecClient:
         api_key: The ``x-api-key`` issued alongside the OAuth credentials.
         base_url: API base URL. Defaults to the production environment;
             pass :data:`SANDBOX_BASE_URL` for the sandbox.
-        timeout: Per-request timeout in seconds.
+        timeout: Per-request timeout in seconds. Ignored when
+            ``http_client`` is supplied (configure the timeout on that
+            client instead).
         http_client: An optional pre-configured :class:`httpx.Client`.
             Mainly useful for testing or advanced transport configuration.
     """
@@ -81,6 +84,7 @@ class InvestecClient:
 
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
+        self._auth_lock = threading.Lock()
 
     @classmethod
     def from_env(
@@ -99,9 +103,12 @@ class InvestecClient:
         Raises:
             InvestecConfigError: If any required variable is missing.
         """
-        client_id = os.environ.get("INVESTEC_CLIENT_ID", "")
-        client_secret = os.environ.get("INVESTEC_CLIENT_SECRET", "")
-        api_key = os.environ.get("INVESTEC_API_KEY", "")
+        # Strip surrounding whitespace so a stray trailing newline in a
+        # copied credential surfaces as a clear config error rather than a
+        # cryptic 401 from the auth endpoint.
+        client_id = os.environ.get("INVESTEC_CLIENT_ID", "").strip()
+        client_secret = os.environ.get("INVESTEC_CLIENT_SECRET", "").strip()
+        api_key = os.environ.get("INVESTEC_API_KEY", "").strip()
         resolved_base_url = base_url or os.environ.get("INVESTEC_BASE_URL") or PRODUCTION_BASE_URL
 
         if not client_id or not client_secret or not api_key:
@@ -135,7 +142,8 @@ class InvestecClient:
         """Obtain (and cache) an OAuth2 access token.
 
         A cached token is reused until it is close to expiry. Pass
-        ``force=True`` to always request a fresh token.
+        ``force=True`` to always request a fresh token. Access is guarded by
+        a lock so concurrent callers do not race to refresh the token.
 
         Returns:
             The bearer access token.
@@ -143,38 +151,41 @@ class InvestecClient:
         Raises:
             InvestecAuthError: If the token request is rejected.
         """
-        if not force and self._token_is_valid():
-            assert self._access_token is not None  # for type checkers
-            return self._access_token
+        with self._auth_lock:
+            # Re-check under the lock so that a token refreshed by another
+            # thread while we were waiting is reused instead of duplicated.
+            if not force and self._token_is_valid():
+                assert self._access_token is not None  # for type checkers
+                return self._access_token
 
-        try:
-            response = self._http.post(
-                _TOKEN_PATH,
-                headers={
-                    "Authorization": self._basic_auth_header(),
-                    "x-api-key": self._api_key,
-                    "Content-Type": "application/x-www-form-urlencoded",
-                    "Accept": "application/json",
-                },
-                data={"grant_type": "client_credentials"},
-            )
-        except httpx.HTTPError as exc:  # pragma: no cover - network failure path
-            raise InvestecAuthError(f"Token request failed: {exc}") from exc
+            try:
+                response = self._http.post(
+                    _TOKEN_PATH,
+                    headers={
+                        "Authorization": self._basic_auth_header(),
+                        "x-api-key": self._api_key,
+                        "Content-Type": "application/x-www-form-urlencoded",
+                        "Accept": "application/json",
+                    },
+                    data={"grant_type": "client_credentials"},
+                )
+            except httpx.HTTPError as exc:  # pragma: no cover - network failure path
+                raise InvestecAuthError(f"Token request failed: {exc}") from exc
 
-        if response.status_code != httpx.codes.OK:
-            raise InvestecAuthError(
-                f"Authentication failed with status {response.status_code}: {response.text}"
-            )
+            if response.status_code != httpx.codes.OK:
+                raise InvestecAuthError(
+                    f"Authentication failed with status {response.status_code}: {response.text}"
+                )
 
-        payload = response.json()
-        token = payload.get("access_token")
-        if not token:
-            raise InvestecAuthError("Token response did not contain an access_token")
+            payload = response.json()
+            token = payload.get("access_token")
+            if not token:
+                raise InvestecAuthError("Token response did not contain an access_token")
 
-        expires_in = float(payload.get("expires_in", 0) or 0)
-        self._access_token = token
-        self._token_expires_at = time.monotonic() + expires_in
-        return token
+            expires_in = float(payload.get("expires_in", 0) or 0)
+            self._access_token = token
+            self._token_expires_at = time.monotonic() + expires_in
+            return token
 
     # -- Request plumbing --------------------------------------------------
 
@@ -186,34 +197,27 @@ class InvestecClient:
         params: dict[str, Any] | None = None,
         json: Any | None = None,
     ) -> Any:
-        token = self.authenticate()
-        headers = {
-            "Authorization": f"Bearer {token}",
-            "Accept": "application/json",
-        }
+        def send(token: str) -> httpx.Response:
+            headers = {
+                "Authorization": f"Bearer {token}",
+                "Accept": "application/json",
+            }
+            try:
+                return self._http.request(
+                    method,
+                    f"{_API_PREFIX}{path}",
+                    headers=headers,
+                    params=params,
+                    json=json,
+                )
+            except httpx.HTTPError as exc:  # pragma: no cover - network failure path
+                raise InvestecAPIError(f"Request to {path} failed: {exc}") from exc
 
-        try:
-            response = self._http.request(
-                method,
-                f"{_API_PREFIX}{path}",
-                headers=headers,
-                params=params,
-                json=json,
-            )
-        except httpx.HTTPError as exc:  # pragma: no cover - network failure path
-            raise InvestecAPIError(f"Request to {path} failed: {exc}") from exc
+        response = send(self.authenticate())
 
         if response.status_code == httpx.codes.UNAUTHORIZED:
             # Token may have been revoked server-side; retry once with a fresh one.
-            token = self.authenticate(force=True)
-            headers["Authorization"] = f"Bearer {token}"
-            response = self._http.request(
-                method,
-                f"{_API_PREFIX}{path}",
-                headers=headers,
-                params=params,
-                json=json,
-            )
+            response = send(self.authenticate(force=True))
 
         if not response.is_success:
             raise InvestecAPIError(

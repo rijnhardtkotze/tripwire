@@ -72,7 +72,9 @@ class Transaction:
     value_date: str
     action_date: str
     amount: float
-    type: str
+    # The Investec "type" field (e.g. DEBIT/CREDIT). Named ``movement_type``
+    # to avoid shadowing the ``type`` built-in.
+    movement_type: str
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
     @classmethod
@@ -90,6 +92,6 @@ class Transaction:
             value_date=data.get("valueDate", ""),
             action_date=data.get("actionDate", ""),
             amount=float(data.get("amount", 0) or 0),
-            type=data.get("type", ""),
+            movement_type=data.get("type", ""),
             raw=data,
         )

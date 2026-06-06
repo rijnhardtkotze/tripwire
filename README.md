@@ -22,7 +22,7 @@ client = InvestecClient(
     base_url=SANDBOX_BASE_URL,  # omit for production
 )
 
-# ...or read from INVESTEC_CLIENT_ID / INVESTEC_CLIENT_SECRET / INVESTEC_API_KEY
+# ...or read from the environment (see variables below)
 with InvestecClient.from_env(base_url=SANDBOX_BASE_URL) as client:
     for account in client.get_accounts():
         balance = client.get_account_balance(account.account_id)
@@ -36,6 +36,17 @@ with InvestecClient.from_env(base_url=SANDBOX_BASE_URL) as client:
         for txn in transactions:
             print(txn.posting_date, txn.description, txn.amount)
 ```
+
+### Environment variables
+
+`from_env()` reads the following variables:
+
+| Variable | Required | Description |
+| -------- | -------- | ----------- |
+| `INVESTEC_CLIENT_ID` | yes | OAuth2 client identifier |
+| `INVESTEC_CLIENT_SECRET` | yes | OAuth2 client secret |
+| `INVESTEC_API_KEY` | yes | The `x-api-key` issued with the OAuth credentials |
+| `INVESTEC_BASE_URL` | no | Base URL; defaults to production (pass the sandbox URL to override). A `base_url` argument takes precedence. |
 
 ### Available methods
 

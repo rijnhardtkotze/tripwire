@@ -70,6 +70,17 @@ def test_from_env_reads_variables(monkeypatch: pytest.MonkeyPatch) -> None:
     assert client._base_url == BASE_URL
 
 
+def test_from_env_strips_whitespace(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("INVESTEC_CLIENT_ID", "  cid\n")
+    monkeypatch.setenv("INVESTEC_CLIENT_SECRET", "csecret ")
+    monkeypatch.setenv("INVESTEC_API_KEY", "\tapikey")
+    monkeypatch.delenv("INVESTEC_BASE_URL", raising=False)
+    client = InvestecClient.from_env(base_url=BASE_URL)
+    assert client._client_id == "cid"
+    assert client._client_secret == "csecret"
+    assert client._api_key == "apikey"
+
+
 def test_authenticate_sends_basic_auth_and_api_key(httpx_mock: HTTPXMock) -> None:
     mock_token(httpx_mock)
     with make_client() as client:
@@ -172,6 +183,7 @@ def test_get_account_transactions_with_filters(httpx_mock: HTTPXMock) -> None:
                         "description": "Coffee Shop",
                         "amount": 42.5,
                         "postedOrder": 1,
+                        "type": "DEBIT",
                     }
                 ]
             }
@@ -191,6 +203,7 @@ def test_get_account_transactions_with_filters(httpx_mock: HTTPXMock) -> None:
     assert txn.amount == 42.5
     assert txn.description == "Coffee Shop"
     assert txn.posted_order == 1
+    assert txn.movement_type == "DEBIT"
 
 
 def test_transfer_multiple_posts_transfer_list(httpx_mock: HTTPXMock) -> None:
