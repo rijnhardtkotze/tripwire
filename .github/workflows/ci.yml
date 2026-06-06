@@ -9,15 +9,12 @@ permissions:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: blacksmith-2vcpu-ubuntu-2404
+    container:
+      image: python:3.11-slim
     steps:
       - name: Checkout repository
         uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
-
-      - name: Set up Python
-        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
-        with:
-          python-version: "3.11"
 
       - name: Set up uv
         uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a # v4
@@ -29,16 +26,25 @@ jobs:
         id: detect-tests
         run: |
           python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
           from pathlib import Path
 
           excluded_dirs = {".git", ".venv", "node_modules", "__pycache__"}
           has_tests = False
 
-          for path in Path(".").rglob("*.py"):
-              if excluded_dirs.intersection(path.parts):
-                  continue
-              if "tests" in path.parts or path.name.startswith("test_") or path.name.endswith("_test.py"):
-                  has_tests = True
+          for root, dirs, files in os.walk(".", topdown=True):
+              dirs[:] = [directory for directory in dirs if directory not in excluded_dirs]
+              root_parts = Path(root).parts
+
+              for file_name in files:
+                  if not file_name.endswith(".py"):
+                      continue
+
+                  if "tests" in root_parts or file_name.startswith("test_") or file_name.endswith("_test.py"):
+                      has_tests = True
+                      break
+
+              if has_tests:
                   break
 
           print(f"has_tests={'true' if has_tests else 'false'}")
