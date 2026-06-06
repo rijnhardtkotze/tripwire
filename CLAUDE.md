@@ -98,10 +98,29 @@ Testing framework not yet configured. When adding tests:
 
 ## Dependencies
 
-Currently no external dependencies. Add dependencies to `pyproject.toml` via:
+- **Runtime:** `httpx` (HTTP client used by the Investec API wrapper)
+- **Dev:** `pytest`, `pytest-httpx` (test suite with mocked HTTP transport)
+
+Add dependencies to `pyproject.toml` via:
 ```bash
-uv add <package-name>
+uv add <package-name>        # runtime
+uv add --dev <package-name>  # development
 ```
+
+## Investec API Wrapper
+
+The `tripwire.investec` subpackage provides `InvestecClient`, a typed
+wrapper around the Investec Programmable Banking Open API. It handles
+OAuth2 `client_credentials` auth with token caching and exposes the core
+Account Information, transfer, and payment endpoints.
+
+| File | Purpose |
+| ------ | --------- |
+| `src/tripwire/investec/client.py` | `InvestecClient`: auth, token caching, endpoints |
+| `src/tripwire/investec/models.py` | `Account`, `AccountBalance`, `Transaction` dataclasses |
+| `src/tripwire/investec/exceptions.py` | Exception hierarchy rooted at `InvestecError` |
+
+See `README.md` for usage. Run the tests with `uv run pytest`.
 
 ## Git Workflow
 
@@ -114,6 +133,7 @@ uv add <package-name>
 | File | Purpose |
 | ------ | --------- |
 | `src/tripwire/__init__.py` | Main module and CLI entry point |
+| `src/tripwire/investec/` | Investec Programmable Banking API wrapper |
 | `pyproject.toml` | Project metadata, dependencies, build config |
 | `mise.toml` | Developer tool versions |
 | `.python-version` | Python version for the project |

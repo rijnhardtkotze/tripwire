@@ -7,7 +7,9 @@ authors = [
     { name = "Rijnhardt Kotze", email = "padpatrollie@gmail.com" }
 ]
 requires-python = ">=3.11"
-dependencies = []
+dependencies = [
+    "httpx>=0.28.1",
+]
 
 [project.scripts]
 tripwire = "tripwire:main"
@@ -15,3 +17,13 @@ tripwire = "tripwire:main"
 [build-system]
 requires = ["uv_build>=0.9.15,<0.10.0"]
 build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.3",
+    "pytest-httpx>=0.36.2",
+]
