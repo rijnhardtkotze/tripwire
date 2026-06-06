@@ -7,6 +7,7 @@ network calls or credentials are required.
 from __future__ import annotations
 
 import base64
+from decimal import Decimal
 
 import httpx
 import pytest
@@ -162,6 +163,14 @@ def test_authenticate_invalid_json_raises(httpx_mock: HTTPXMock) -> None:
             client.authenticate()
 
 
+def test_authenticate_non_object_json_raises(httpx_mock: HTTPXMock) -> None:
+    """A token response that is valid JSON but not an object raises cleanly."""
+    httpx_mock.add_response(method="POST", url=TOKEN_URL, json=["unexpected"])
+    with make_client() as client:
+        with pytest.raises(InvestecAuthError):
+            client.authenticate()
+
+
 def test_get_accounts(httpx_mock: HTTPXMock) -> None:
     """get_accounts maps the response envelope into Account objects."""
     mock_token(httpx_mock)
@@ -189,6 +198,10 @@ def test_get_accounts(httpx_mock: HTTPXMock) -> None:
     assert isinstance(accounts[0], Account)
     assert accounts[0].account_id == "172878438321"
     assert accounts[0].product_name == "Private Bank Account"
+    # Authenticated data requests must carry both the bearer token and the API key.
+    data_request = httpx_mock.get_requests()[-1]
+    assert data_request.headers["Authorization"] == "Bearer test-token"
+    assert data_request.headers["x-api-key"] == "key"
 
 
 def test_get_account_balance(httpx_mock: HTTPXMock) -> None:
@@ -210,9 +223,32 @@ def test_get_account_balance(httpx_mock: HTTPXMock) -> None:
         balance = client.get_account_balance("123")
 
     assert isinstance(balance, AccountBalance)
-    assert balance.current_balance == 28857.76
-    assert balance.available_balance == 98857.76
+    assert balance.current_balance == Decimal("28857.76")
+    assert balance.available_balance == Decimal("98857.76")
     assert balance.currency == "ZAR"
+
+
+def test_monetary_values_are_exact_decimals(httpx_mock: HTTPXMock) -> None:
+    """Balances are parsed as exact Decimals with no binary float drift."""
+    mock_token(httpx_mock)
+    httpx_mock.add_response(
+        method="GET",
+        url=f"{BASE_URL}/za/pb/v1/accounts/123/balance",
+        json={
+            "data": {
+                "accountId": "123",
+                "currentBalance": 0.1,
+                "availableBalance": 0.2,
+                "currency": "ZAR",
+            }
+        },
+    )
+    with make_client() as client:
+        balance = client.get_account_balance("123")
+
+    assert isinstance(balance.current_balance, Decimal)
+    # The classic float trap (0.1 + 0.2 != 0.3) does not bite with Decimal.
+    assert balance.current_balance + balance.available_balance == Decimal("0.3")
 
 
 def test_get_account_transactions_with_filters(httpx_mock: HTTPXMock) -> None:
@@ -253,7 +289,7 @@ def test_get_account_transactions_with_filters(httpx_mock: HTTPXMock) -> None:
     assert len(transactions) == 1
     txn = transactions[0]
     assert isinstance(txn, Transaction)
-    assert txn.amount == 42.5
+    assert txn.amount == Decimal("42.5")
     assert txn.description == "Coffee Shop"
     assert txn.posted_order == 1
     assert txn.movement_type == "DEBIT"

@@ -195,6 +195,10 @@ class InvestecClient:
                 raise InvestecAuthError(
                     f"Token response was not valid JSON: {response.text}"
                 ) from exc
+            if not isinstance(payload, dict):
+                raise InvestecAuthError(
+                    f"Token response was not a JSON object: {response.text}"
+                )
             token = payload.get("access_token")
             if not token:
                 raise InvestecAuthError("Token response did not contain an access_token")
@@ -218,6 +222,7 @@ class InvestecClient:
         def send(token: str) -> httpx.Response:
             headers = {
                 "Authorization": f"Bearer {token}",
+                "x-api-key": self._api_key,
                 "Accept": "application/json",
             }
             try:

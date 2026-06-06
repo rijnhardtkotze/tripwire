@@ -9,7 +9,19 @@ with fields not yet modelled here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from decimal import Decimal
 from typing import Any
+
+
+def _to_decimal(value: Any) -> Decimal:
+    """Convert an API numeric value to :class:`~decimal.Decimal`.
+
+    Parsing through ``str`` keeps monetary values exact and avoids the
+    binary rounding drift inherent to ``float`` (e.g. ``0.1 + 0.2``).
+    """
+    if value is None or value == "":
+        return Decimal("0")
+    return Decimal(str(value))
 
 
 @dataclass
@@ -41,8 +53,8 @@ class AccountBalance:
     """The balance snapshot for a single account."""
 
     account_id: str
-    current_balance: float
-    available_balance: float
+    current_balance: Decimal
+    available_balance: Decimal
     currency: str
     raw: dict[str, Any] = field(default_factory=dict, repr=False)
 
@@ -51,8 +63,8 @@ class AccountBalance:
         """Build an :class:`AccountBalance` from a raw API balance object."""
         return cls(
             account_id=data.get("accountId", ""),
-            current_balance=float(data.get("currentBalance", 0) or 0),
-            available_balance=float(data.get("availableBalance", 0) or 0),
+            current_balance=_to_decimal(data.get("currentBalance")),
+            available_balance=_to_decimal(data.get("availableBalance")),
             currency=data.get("currency", ""),
             raw=data,
         )
@@ -71,7 +83,7 @@ class Transaction:
     posting_date: str
     value_date: str
     action_date: str
-    amount: float
+    amount: Decimal
     # The Investec "type" field (e.g. DEBIT/CREDIT). Named ``movement_type``
     # to avoid shadowing the ``type`` built-in.
     movement_type: str
@@ -91,7 +103,7 @@ class Transaction:
             posting_date=data.get("postingDate", ""),
             value_date=data.get("valueDate", ""),
             action_date=data.get("actionDate", ""),
-            amount=float(data.get("amount", 0) or 0),
+            amount=_to_decimal(data.get("amount")),
             movement_type=data.get("type", ""),
             raw=data,
         )
