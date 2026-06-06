@@ -1,0 +1,54 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version-file: ".python-version"
+
+      - name: Set up uv
+        uses: astral-sh/setup-uv@38f3f104447c67c051c4a08e39b64a148898af3a
+
+      - name: Sync dependencies
+        run: uv sync
+
+      - name: Detect tests
+        id: detect-tests
+        run: |
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import os
+
+          excluded_dirs = {".git", ".venv", "node_modules", "__pycache__"}
+          has_tests = False
+
+          for root, dirs, files in os.walk(".", topdown=True):
+              dirs[:] = [d for d in dirs if d not in excluded_dirs]
+              for filename in files:
+                  if not filename.endswith(".py"):
+                      continue
+                  root_parts = root.split(os.sep)
+                  if "tests" in root_parts or filename.startswith("test_") or filename.endswith("_test.py"):
+                      has_tests = True
+                      break
+              if has_tests:
+                  break
+
+          print(f"has_tests={'true' if has_tests else 'false'}")
+          PY
+
+      - name: Run tests
+        if: steps.detect-tests.outputs.has_tests == 'true'
+        run: uv run --with pytest pytest
