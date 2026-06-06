@@ -27,17 +27,22 @@ jobs:
 
       - name: Detect tests
         id: detect-tests
-        shell: bash
         run: |
-          has_tests=false
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          from pathlib import Path
 
-          if find tests -type f -name '*.py' -print -quit 2>/dev/null | grep -q .; then
-            has_tests=true
-          elif find . -type f \( -name 'test_*.py' -o -name '*_test.py' \) -print -quit | grep -q .; then
-            has_tests=true
-          fi
+          excluded_dirs = {".git", ".venv", "node_modules", "__pycache__"}
+          has_tests = False
 
-          echo "has_tests=$has_tests" >> "$GITHUB_OUTPUT"
+          for path in Path(".").rglob("*.py"):
+              if excluded_dirs.intersection(path.parts):
+                  continue
+              if "tests" in path.parts or path.name.startswith("test_") or path.name.endswith("_test.py"):
+                  has_tests = True
+                  break
+
+          print(f"has_tests={'true' if has_tests else 'false'}")
+          PY
 
       - name: Run tests
         if: steps.detect-tests.outputs.has_tests == 'true'
